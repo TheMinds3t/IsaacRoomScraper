@@ -1,4 +1,4 @@
-from PyQt6.QtGui import QImage
+from PyQt6.QtGui import QImage, QColor, QPixelFormat
 
 class Entry:
     def __init__(self, type: int, variant: int, subtype: int, weight: float = 1):
@@ -67,13 +67,33 @@ class Room:
     def __str__(self):
         return f"(Room \'{self.name}\' {self.entry}, Shape={self.shape} Dimensions=({self.width},{self.height}) Difficulty={self.difficulty}, Doors={list(map(lambda val: str(val), self.doors))}, Spawns={list(map(lambda val: str(val), self.spawns))})"
     
+
+def add_outline_to_img(img: QImage):
+    if not img.allGray() and img.pixelFormat().colorModel() == QPixelFormat.ColorModel.RGB:
+        for x_p in range(0,img.width()):
+            for y_p in range(0,img.height()):
+                col = img.pixelColor(x_p,y_p)
+                av = (col.red() + col.green() + col.blue()) / 3.0
+
+                if col.alpha() >= 1 and col.alpha() != 225: # border color
+                    for i in range(-1,2):
+                        for j in range(-1,2):
+                            prox_x = max(min(x_p+i,img.width()-1),0)
+                            prox_y = max(min(y_p+j,img.height()-1),0)
+                            prox_col = img.pixelColor(prox_x,prox_y)
+
+                            if prox_col.alpha() == 0 and prox_x != x_p and prox_y != y_p:
+                                img.setPixelColor(prox_x, prox_y, QColor(0,0,0,225))
+    
+    return img 
+
 class BREntry:
     def __init__(self, id: int, variant: int, subtype: int, name: str = None, group: str = None, kind: str = None, image: str = None, ):
         self.group = group
         self.kind = kind 
         self.entry = Entry(id, variant, subtype)
         self.name = name 
-        self.image = QImage(image)
+        self.image = add_outline_to_img(QImage(image))
         self.image_path = image 
         print(self.image_path)
 

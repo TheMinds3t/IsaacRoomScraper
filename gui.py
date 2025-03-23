@@ -8,7 +8,8 @@ import math
 # import PyQt6.QtWidgets as qt
 from PyQt6.QtWidgets import QVBoxLayout, QApplication, QLabel, QWidget, QPushButton, QScrollArea, QGridLayout, QVBoxLayout
 from PyQt6 import QtCore, QtGui
-from PyQt6.QtGui import QImage, QPixmap
+from PyQt6.QtGui import QImage, QPixmap, QColor
+
 
 class QEntityTile(QWidget):
     def __init__(self, entry: structs.Entry, parent: QWidget):
@@ -17,20 +18,21 @@ class QEntityTile(QWidget):
         self.layout = QVBoxLayout(self)
         self.setLayout(self.layout)
         self.setMaximumSize(128,160)
+        self.id_label = QLabel(self.entry.type_string())
+        self.setFixedSize(128,96)
 
         if stage_parser.basement_renovator_dictionary.get(self.entry.type_string()):
-            self.img = QImage(stage_parser.basement_renovator_dictionary[self.entry.type_string()].image)
+            ent_info = stage_parser.basement_renovator_dictionary[self.entry.type_string()]
+            self.img = QImage(ent_info.image)
             self.img_label = QLabel()
             self.img_label.setPixmap(QPixmap(self.img))
-            self.img_label.setMinimumSize(self.img.width(),self.img.height())
+            self.setFixedSize(max(math.floor(self.img.width()*2),128),max(math.floor(self.img.height()*1.5)+64,96))
             self.layout.addWidget(self.img_label)
-            self.setMinimumHeight(self.img.height()*2+64)
+            self.id_label.setText(f"{ent_info.name}\n{self.entry.type_string()}")
 
-        self.id_label = QLabel(self.entry.type_string())
         self.layout.addWidget(self.id_label)
         self.quantity_label = QLabel("Quantity: 1")
         self.layout.addWidget(self.quantity_label)
-        self.setMinimumSize(64,64)
         self.quantity = 1
 
     def increment_quantity(self):
@@ -43,8 +45,6 @@ class QEntityTile(QWidget):
         rect = QtCore.QRect(0, 0, painter.device().width(), painter.device().height())
         painter.setBrush(QtGui.QColor(255, 255, 255))
         painter.drawRect(rect)
-
-
 
 class MainGUI:
     def __init__(self, rooms: list):
@@ -64,13 +64,15 @@ class MainGUI:
         self.ent_tile_scroll_area = QScrollArea()
         self.ent_tile_layout = QGridLayout(self.ent_tile_scroll_area)
         self.ent_tile_layout.setSpacing(64)
+        self.ent_tile_layout.setContentsMargins(20,20,20,20)
 
         self.ent_tile_area = QWidget()
-
-        self.ent_tile_scroll_area.setLayout(self.ent_tile_layout)
-        self.ent_tile_scroll_area.setGeometry(0,0,200,1000)
-        self.ent_tile_scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        self.ent_tile_area.setLayout(self.ent_tile_layout)
         self.ent_tile_scroll_area.setWidgetResizable(True)
+        self.ent_tile_scroll_area.setMinimumWidth(200)
+        self.ent_tile_scroll_area.setLayout(self.ent_tile_layout)
+        self.ent_tile_scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.ent_tile_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.ent_tile_scroll_area.setWidget(self.ent_tile_area)
         
         self.layout.addWidget(self.ent_tile_scroll_area,1,3,4,4)
@@ -100,9 +102,11 @@ class MainGUI:
             if spawn.entry.type_string() in self.cur_entity_tiles.keys():
                 self.cur_entity_tiles[spawn.entry.type_string()].increment_quantity()
             else:
-                self.ent_tile_layout.addWidget(new_tile, len(self.cur_entity_tiles) % 4, math.ceil((len(self.cur_entity_tiles)+1) / 4) - 1)
+                x_ind = math.ceil((len(self.cur_entity_tiles)+1) / 4) - 1
+                y_ind = len(self.cur_entity_tiles) % 4
+                self.ent_tile_layout.addWidget(new_tile, x_ind, y_ind)
                 self.ent_tile_layout.update()
-                self.ent_tile_layout.setGeometry(QtCore.QRect(0,0,200,(math.ceil(len(self.cur_entity_tiles) / 4) + 1) * 80))
+                self.ent_tile_layout.setGeometry(QtCore.QRect(0,0,200,(math.ceil(len(self.cur_entity_tiles) / 4) + 1) * 128))
                 self.cur_entity_tiles[spawn.entry.type_string()] = new_tile
     
         self.loaded_rooms.append(room)
