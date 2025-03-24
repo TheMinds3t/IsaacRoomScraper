@@ -2,15 +2,21 @@ import io
 import os 
 
 settings = {
+    "XPos": 200,
+    "YPos": 200,
     "Width": 600,
     "Height": 400,
+    "LastPath": "",
     "GUI": True,
     "BRFiles": set()
 }
 
 cast_funcs = {
+    "XPos": int,
+    "YPos": int,
     "Width": int,
     "Height": int,
+    "LastPath": str,
     "GUI": bool,
     "BRFiles": lambda val: set(map(lambda val2: val2.replace(";",""),val.split(";")))
 }

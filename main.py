@@ -20,4 +20,6 @@ if __name__ == "__main__":
 
     gui = gui.MainGUI(cmd_rooms)
 
-    sys.exit(gui.app.exec())
+    result = gui.app.exec()
+    config.save()
+    sys.exit(result)
