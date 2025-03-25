@@ -6,10 +6,33 @@ import config
 import math
 
 # import PyQt6.QtWidgets as qt
-from PyQt6.QtWidgets import QVBoxLayout, QApplication, QLabel, QWidget, QPushButton, QScrollArea, QGridLayout, QVBoxLayout,  QLayout, QSizePolicy, QListWidget, QListWidgetItem
+from PyQt6.QtWidgets import QVBoxLayout, QApplication, QLabel, QWidget, QPushButton, QScrollArea, QGridLayout, QVBoxLayout,  QLayout, QSizePolicy, QListWidget, QListWidgetItem, QTextEdit
 from PyQt6 import QtCore, QtGui
 from PyQt6.QtGui import QImage, QPixmap, QKeyEvent, QResizeEvent, QMoveEvent
-from PyQt6.QtCore import QMargins, QPoint, QRect, QSize, Qt
+from PyQt6.QtCore import QMargins, QPoint, QRect, QSize, Qt, QModelIndex, pyqtSlot, QRunnable
+
+class QWorker(QRunnable):
+    '''
+    Worker thread
+
+    Inherits from QRunnable to handler worker thread setup, signals and wrap-up.
+
+    :param callback: The function callback to run on this worker thread. Supplied args and
+                     kwargs will be passed through to the runner.
+    :type callback: function
+    :param args: Arguments to pass to the callback function
+    :param kwargs: Keywords to pass to the callback function
+    '''
+
+    def __init__(self, funct, *args, **kwargs):
+        super().__init__()
+        self.funct = funct
+        self.args = args
+        self.kwargs = kwargs
+
+    @pyqtSlot()
+    def run(self):
+        self.funct(*self.args, **self.kwargs)
 
 class QEntityTile(QWidget):
     def __init__(self, entry: structs.Entry, parent: QWidget):
@@ -45,6 +68,18 @@ class QEntityTile(QWidget):
         rect = QtCore.QRect(0, 0, painter.device().width(), painter.device().height())
         painter.setBrush(QtGui.QColor(255, 255, 255))
         painter.drawRect(rect)
+
+class QSearchFilterTool(QWidget):
+    def __init__(self, parent:QWidget = None):
+        super().__init__(parent)
+        self.search_bar = QTextEdit(self)
+        self.search_bar.setPlaceholderText("Search...")
+        self.search_bar.setMaximumHeight(int(self.search_bar.font().pointSize()*3.0) + 15)
+        self.search_bar.setSizePolicy(QSizePolicy.Policy.Maximum,QSizePolicy.Policy.Maximum)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Expanding)
+
+        # self.layout = QGridLayout()
+
 
 # sourced from https://doc.qt.io/qtforpython-6/examples/example_widgets_layouts_flowlayout.html
 class QFlowLayout(QLayout):
@@ -149,14 +184,6 @@ class QFlowLayout(QLayout):
 
 
 class MainGUI:
-    def resized(self, e: QResizeEvent):
-        config.settings["Width"] = e.size().width()
-        config.settings["Height"] = e.size().height()
-
-    def moved(self, e: QMoveEvent):
-        config.settings["XPos"] = e.pos().x()
-        config.settings["YPos"] = e.pos().y()
-
     def __init__(self, rooms: list):
         self.app = QApplication([])
         self.window = QWidget()
@@ -166,11 +193,6 @@ class MainGUI:
         self.window.moveEvent = lambda e: self.moved(e)
 
         self.layout = QGridLayout(parent=self.window)
-        self.layout.setColumnMinimumWidth(1,96)
-        self.layout.setColumnMinimumWidth(3,96)
-        self.layout.setRowMinimumHeight(1,24)
-        self.layout.setRowMinimumHeight(2,24)
-        self.layout.setRowMinimumHeight(3,48)
         self.window.setLayout(self.layout)
 
         self.ent_tile_scroll_area = QScrollArea()
@@ -182,65 +204,99 @@ class MainGUI:
         self.ent_tile_area.setLayout(self.ent_tile_layout)
         self.ent_tile_scroll_area.setWidgetResizable(True)
         self.ent_tile_scroll_area.setMinimumSize(256, 128)
-        self.ent_tile_scroll_area.setMaximumSize(1024,1024)
         self.ent_tile_scroll_area.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
         self.ent_tile_scroll_area.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         self.ent_tile_scroll_area.setWidget(self.ent_tile_area)
-        
-        self.layout.addWidget(self.ent_tile_scroll_area,1,3,5,2)
 
         # room file list 
         self.loaded_file_list = QListWidget(parent=self.window)
         self.loaded_file_list.setSortingEnabled(True)
+        self.loaded_file_list.keyPressEvent = lambda e: self.list_keypress(e)
         self.list_title = QLabel(parent=self.window)
         self.list_title.setText("Loaded Files:")
-        self.layout.addWidget(self.list_title,3,1,1,2)
-        self.layout.addWidget(self.loaded_file_list,4,1,2,2)
+        self.list_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignBottom)
+        self.list_title.setMaximumHeight(24)
 
         # add room / add basement renovator file 
         self.add_room_button = QPushButton(text="Add Stage Roomlist XML",parent=self.window)
         self.add_room_button.clicked.connect(self.prompt_for_room)
-        self.layout.addWidget(self.add_room_button,1,1,1,2)
         self.add_br_button = QPushButton(text="Add Basement Renovator Entity XMLs For Images",parent=self.window)
         self.add_br_button.clicked.connect(self.prompt_for_br)
-        self.layout.addWidget(self.add_br_button,2,1,1,2)
         self.cur_entity_tiles = {}
         self.loaded_rooms = list()
 
+        self.search_bar = QTextEdit(parent=self.window)
+        self.search_bar.textChanged.connect(self.search_keypress)
+        self.search_bar.setPlaceholderText("Search entity list...")
+
+        # searchKey = self.search_bar.keyPressEvent
+        # self.search_bar.keyPressEvent = lambda e: self.search_keypress(searchKey, e)
+        self.search_filter = QSearchFilterTool(parent=self.window)
+        self.search_filter.setHidden(True)
+
+        self.layout.setColumnMinimumWidth(1,96)
+        self.layout.setColumnMinimumWidth(3,96)
+        self.layout.setRowMinimumHeight(1,24)
+        self.layout.setRowMinimumHeight(2,24)
+        self.layout.setRowMinimumHeight(3,24)
+        self.layout.setRowMinimumHeight(4,48)
+        self.layout.addWidget(self.add_room_button,1,1,1,1)
+        self.layout.addWidget(self.add_br_button,2,1,1,1)
+        self.layout.addWidget(self.list_title,3,1,1,2,QtCore.Qt.AlignmentFlag.AlignBottom)
+        self.layout.addWidget(self.loaded_file_list,4,1,2,2)
+        self.layout.addWidget(self.ent_tile_scroll_area,3,3,3,2)
+        self.layout.addWidget(self.search_bar, 1, 3, 2, 1)
+        self.layout.addWidget(self.search_filter, 1, 4, 2, 1)
         self.window.show()
 
-    def prompt_for_room(self):
-        for room in stage_parser.parse_stage():
+        for room in rooms:
             self.add_room(room)
-        self.update_loaded_file_list()
-        self.window.repaint()
+
+    def resized(self, e: QResizeEvent):
+        config.settings["Width"] = e.size().width()
+        config.settings["Height"] = e.size().height()
+
+    def moved(self, e: QMoveEvent):
+        config.settings["XPos"] = e.pos().x()
+        config.settings["YPos"] = e.pos().y()
+
+    def prompt_for_room(self):
+        roomlist, filename = stage_parser.parse_stage()
+        if filename != None:
+            for room in roomlist:
+                self.add_room(room)
+            self.loaded_file_list.addItem(QListWidgetItem(filename, self.loaded_file_list))
+            self.window.repaint()
 
     def prompt_for_br(self):
         stage_parser.scrape_br_file()
         self.window.repaint()
 
+    def search_keypress(self):
+        text = self.search_bar.toPlainText().lower()
+
+        for key in self.cur_entity_tiles.keys():
+            tile = self.cur_entity_tiles[key]
+
+            if isinstance(tile, QEntityTile):
+                if tile.id_label.text().lower().find(text) == -1 and len(text) != 0:
+                    tile.setHidden(True)
+                    self.ent_tile_layout.removeWidget(tile)
+                else:
+                    tile.setHidden(False)
+                    self.ent_tile_layout.addWidget(tile)
 
     def list_keypress(self, e: QKeyEvent):
         if e.key() == Qt.Key.Key_Delete:
-            self.remove_roomlist(self.loaded_file_list.selectedItems())
+            self.remove_roomlist(self.loaded_file_list.currentItem())
 
-    def update_loaded_file_list(self):
-        self.loaded_file_list.clear()
-        self.loaded_file_list.keyPressEvent = lambda e: self.list_keypress(e)
-
-        for file in stage_parser.loaded_files:
-            item = QListWidgetItem(file, self.loaded_file_list)
-            self.loaded_file_list.addItem(item)
-
+    def remove_roomlist(self, sel_file:QListWidgetItem):
+        print(f"Unloaded \'{sel_file.text()}\'")
+        self.loaded_file_list.takeItem(self.loaded_file_list.currentIndex().row())
         self.loaded_file_list.update()
-    
-    def remove_roomlist(self, file_list:list):
-        for file in file_list:
-            stage_parser.unload_file(file.text())
-            print(f"Unloaded \'{file.text()}\'")
+        self.loaded_file_list.repaint()
         
-        self.update_loaded_file_list()
-        self.updateEntityTiles()
+        self.update_entity_tiles()
 
     def add_room(self, room: structs.Room):
         for spawn in room.spawns:
@@ -254,21 +310,27 @@ class MainGUI:
                 self.ent_tile_layout.addWidget(new_tile)
                 # self.ent_tile_layout.update()
                 self.cur_entity_tiles[spawn.entry.type_string()] = new_tile
-    
+
         self.loaded_rooms.append(room)
         self.window.repaint()
 
-    def updateEntityTiles(self):
+    def update_entity_tiles(self):
         for key in self.cur_entity_tiles.keys():
             tile = self.cur_entity_tiles[key]
             self.ent_tile_layout.removeWidget(tile)
             tile.setParent(None)
 
         self.cur_entity_tiles.clear()
+        loaded_files = self.loaded_file_list.count()
 
-        for file in stage_parser.loaded_files:
-            for room in stage_parser.parse_stage(file):
-                self.add_room(room)
+        for ind in range(0,loaded_files):
+            file = self.loaded_file_list.itemAt(QPoint(ind,0))
+            if isinstance(file, QListWidgetItem):
+                print(f"Reloading \'{file}\'..")
+                stage,filename = stage_parser.parse_stage(file.text())
 
+                if stage != None:
+                    for room in stage:
+                        self.add_room(room)
 
         self.window.repaint()

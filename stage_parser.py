@@ -10,17 +10,16 @@ basement_renovator_dictionary = {}
 loaded_files = []
 
 def unload_file(filename:str):
-    ret = 0
     for file in loaded_files:
         if file == filename:
             loaded_files.remove(file)
-            ret += 1
+            return True 
         
-    return ret
+    return False 
 
 def pass_or_find_file(filename:str, msg:str = "Open the xml version of STB files, or the EntitiesMod.xml/EntitiesRepentance.xml", multiple:bool = False):
     if filename == None:
-        path = config.settings["LastPath"]
+        path = f"{config.settings["LastPath"]}/"
         if not os.path.exists(path):
             path = "*"
 
@@ -31,7 +30,6 @@ def pass_or_find_file(filename:str, msg:str = "Open the xml version of STB files
         if file_chosen != None and os.path.exists(file_chosen):
             config.settings["LastPath"] = os.path.dirname(file_chosen)
             config.save()
-
 
         return file_chosen
     
@@ -50,14 +48,14 @@ def scrape_br_file(filename: str = None):
             for ent in reg_file.find('data').find_all('entity'):
                 if ent:
                     br_entry = structs.BREntry(group=ent.get("Group"),kind=ent.get("Kind"), image=f"{os.path.dirname(filename)}/{ent.get("Image")}",id=ent.get("ID"),variant=ent.get("Variant"),subtype=ent.get("Subtype"),name=ent.get("Name"))
-                    basement_renovator_dictionary[br_entry.entry.type_string()] = br_entry
+                    basement_renovator_dictionary.setdefault(br_entry.entry.type_string(), br_entry)
 
             config.save()
     
     print(f"Pre-scrape size: {old_total}, Post-scrape size: {len(basement_renovator_dictionary)}!")
 
 def get_br_entry(entry: structs.Entry):
-    ret = basement_renovator_dictionary[entry.type_string()]
+    ret = basement_renovator_dictionary.get(entry.type_string())
 
     if ret != None:
         if ret.image == None:
@@ -114,5 +112,5 @@ def parse_stage(filename: str = None):
         
         config.save()
     
-    return ret_rooms
+    return ret_rooms, filename
 
