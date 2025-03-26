@@ -2,12 +2,13 @@ import easygui
 import structs
 import config
 import os
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, Tag, ResultSet
 from PyQt6.QtGui import QImage, QColor, QPixelFormat
 
-basement_renovator_dictionary = {}
+basement_renovator_dictionary = dict[str,structs.BREntry]()
+br_group_to_kind_map = dict[str,str]()
 
-loaded_files = []
+loaded_files = list[str]()
 
 def unload_file(filename:str):
     for file in loaded_files:
@@ -34,6 +35,26 @@ def pass_or_find_file(filename:str, msg:str = "Open the xml version of STB files
         return file_chosen
     
     return filename
+
+def flush_floor_group_kind_dict(queue:ResultSet):
+    while len(queue) > 0:
+        cur = queue[0]
+        if isinstance(cur, Tag):
+            if "Label" in cur.attrs and "Name" in cur.attrs:
+                # print(f"adding {cur["Name"]} = {cur["Label"]} to floor dict")
+                br_group_to_kind_map[cur["Name"]] = cur["Label"]
+            elif "Label" in cur.attrs:
+                for child in cur.children:
+                    if isinstance(child, Tag) and child.name == "group" and "Name" in child.attrs:
+                        br_group_to_kind_map[child["Name"]] = cur["Label"]
+            else:
+                pass
+                # print(f"not adding {cur.get("Name")} = {cur.get("Label")} to floor dict")
+        else:
+            pass
+            # print(f"{cur} is not a valid tag while flushing floor dict..")
+
+        queue.pop(0)
     
 def scrape_br_file(filename: str = None):
     old_total = len(basement_renovator_dictionary)
@@ -44,10 +65,43 @@ def scrape_br_file(filename: str = None):
         with open(filename, 'r') as file:
             config.settings["BRFiles"].add(filename)
             reg_file = BeautifulSoup(file.read(), "xml")
+            floor_group_layout = reg_file.find_all(name="group")
+
+            if floor_group_layout:
+                print(f"Adding floormap for {filename}:")
+                flush_floor_group_kind_dict(floor_group_layout)
 
             for ent in reg_file.find('data').find_all('entity'):
-                if ent:
-                    br_entry = structs.BREntry(group=ent.get("Group"),kind=ent.get("Kind"), image=f"{os.path.dirname(filename)}/{ent.get("Image")}",id=ent.get("ID"),variant=ent.get("Variant"),subtype=ent.get("Subtype"),name=ent.get("Name"))
+                if ent and "ID" in ent.attrs and "Variant" in ent.attrs:
+                    group = ent.get("Group")
+                    kind = ent.get("Kind")
+
+                    if group == None and ent.parent.name == "group":
+                        if "Label" in ent.parent.attrs and "Name" in ent.parent.attrs:
+                            kind = ent.parent["Label"]                        
+                            group = ent.parent["Name"]
+                        else:
+                            cur_parent = ent.parent 
+
+                            while cur_parent.name == "group":
+                                if "Name" in cur_parent.attrs:
+                                    group = cur_parent["Name"]
+
+                                cur_parent = cur_parent.parent 
+
+                                if cur_parent.parent.name == "group":
+                                    break
+
+                    if kind == None and group != None and group in br_group_to_kind_map:
+                        kind = br_group_to_kind_map[group]
+
+                    if group == None and kind != None and kind in br_group_to_kind_map:
+                        group = br_group_to_kind_map[kind]
+
+                    if ent.parent.name == "group" and "Label" in ent.parent.attrs:
+                        kind = ent.parent["Label"]
+
+                    br_entry = structs.BREntry(group=group,kind=kind, image=f"{os.path.dirname(filename)}/{ent.get("Image")}",id=ent.get("ID"),variant=ent.get("Variant"),subtype=ent.get("Subtype"),name=ent.get("Name"))
                     basement_renovator_dictionary.setdefault(br_entry.entry.type_string(), br_entry)
 
             config.save()

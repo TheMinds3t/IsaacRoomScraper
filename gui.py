@@ -8,7 +8,7 @@ import math
 # import PyQt6.QtWidgets as qt
 from PyQt6.QtWidgets import QVBoxLayout, QApplication, QLabel, QWidget, QPushButton, QScrollArea, QGridLayout, QVBoxLayout,  QLayout, QSizePolicy, QListWidget, QListWidgetItem, QTextEdit, QCheckBox
 from PyQt6 import QtCore, QtGui
-from PyQt6.QtGui import QImage, QPixmap, QKeyEvent, QResizeEvent, QMoveEvent
+from PyQt6.QtGui import QImage, QPixmap, QKeyEvent, QResizeEvent, QMoveEvent, QFont
 from PyQt6.QtCore import QMargins, QPoint, QRect, QSize, Qt, QModelIndex, pyqtSlot, QRunnable
 
 class QWorker(QRunnable):
@@ -137,6 +137,7 @@ class QFlowLayout(QLayout):
         for item in self._item_list:
             item.paintEvent(e)
 
+
 class QCheckPanel(QScrollArea):
     def __init__(self, gui, parent:QWidget = None):
         super().__init__(parent=parent)
@@ -157,7 +158,7 @@ class QCheckPanel(QScrollArea):
         self.gui = gui 
 
     def add_checkbox(self, text:str):
-        if text not in self.checks.keys():
+        if text != None and text not in self.checks.keys():
             self.checks[text] = QCheckBox(text,self)
             self.checks[text].setChecked(True)
             self.checks[text].setMaximumHeight(self.checks[text].font().pointSize()*2)
@@ -181,6 +182,10 @@ class QCheckPanel(QScrollArea):
             self.checks[text].setParent(None)
             self.checks.pop(text)
 
+    def set_checkbox(self, text:str, state:Qt.CheckState):
+        if text in self.checks.keys():
+            self.checks[text].setCheckState(state)
+
     def clear_checkboxes(self):
         cache = []
         for key in self.checks.keys():
@@ -188,14 +193,44 @@ class QCheckPanel(QScrollArea):
         
         self.checks.clear()
 
+class QCheckPanelLabel(QWidget):
+    def __init__(self, panel: QCheckPanel = None, title: str = None, parent: QWidget = None):
+        super().__init__(parent=parent)
+        self.layout = QGridLayout(parent=self)
+        self.setLayout(self.layout)
+        self.panel = panel 
+
+        self.check_all_but = QPushButton(text="Check All",parent=self)
+        self.check_all_but.clicked.connect(self.check_all)
+        self.uncheck_all_but = QPushButton(text="Uncheck All",parent=self)
+        self.uncheck_all_but.clicked.connect(self.uncheck_all)
+
+        self.title = QLabel(text=title,parent=self)
+        font = QFont(self.title.font())
+        font.setPointSize(14)
+        self.title.setFont(font)
+
+        self.layout.addWidget(self.title,1,1,1,2)
+        self.layout.addWidget(self.check_all_but,2,1,1,1)
+        self.layout.addWidget(self.uncheck_all_but,2,2,1,1)
+
+    def check_all(self):
+        for item in self.panel.checks.keys():
+            self.panel.set_checkbox(item, Qt.CheckState.Checked)
+    
+    def uncheck_all(self):
+        for item in self.panel.checks.keys():
+            self.panel.set_checkbox(item, Qt.CheckState.Unchecked)
+
 class QEntityTile(QWidget):
-    def __init__(self, entry: structs.Entry, panel:QCheckPanel = None, parent: QWidget = None):
+    def __init__(self, entry: structs.Entry, group_panel:QCheckPanel = None, kind_panel:QCheckPanel = None, parent: QWidget = None):
         super().__init__(parent=parent)
         self.entry = entry 
         self.layout = QVBoxLayout(self)
         self.setLayout(self.layout)
         self.setMaximumSize(128,160)
         self.id_label = QLabel(self.entry.type_string())
+        
         self.setFixedSize(128,96)
         self.br_entry = stage_parser.get_br_entry(self.entry)
 
@@ -203,11 +238,17 @@ class QEntityTile(QWidget):
             self.img = QImage(self.br_entry.image)
             self.img_label = QLabel(parent=self)
             self.img_label.setPixmap(QPixmap(self.img))
-            self.setFixedSize(max(math.floor(self.img.width()*2),128),max(math.floor(self.img.height()*1.5)+64,96))
             self.layout.addWidget(self.img_label)
-            self.id_label.setText(f"{self.br_entry.name}\n{self.entry.type_string()}")
-            panel.add_checkbox(f"Group: {self.br_entry.group}")
-            panel.add_checkbox(f"Kind: {self.br_entry.kind}")
+            self.id_label.setText(f"{self.br_entry.name}\n{self.entry.type_string()}\n{self.br_entry.group},{self.br_entry.kind}")
+            
+            if self.br_entry.group != None:
+                group_panel.add_checkbox(f"Group: {self.br_entry.group}")
+            
+            if self.br_entry.kind != None:
+                kind_panel.add_checkbox(f"Kind: {self.br_entry.kind}")
+
+            id_size = self.id_label.fontMetrics().boundingRect(self.id_label.text())
+            self.setFixedSize(max(self.img.width()*2,math.floor(id_size.width()*1.25)),self.img.height()+id_size.height()*2+64)
 
         self.layout.addWidget(self.id_label)
         self.quantity_label = QLabel("Quantity: 1",parent=self)
@@ -268,6 +309,9 @@ class MainGUI:
         self.list_title.setText("Loaded Files:")
         self.list_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignBottom)
         self.list_title.setMaximumHeight(24)
+        font = QFont(self.list_title.font())
+        font.setPointSize(14)
+        self.list_title.setFont(font)
 
         # add room / add basement renovator file 
         self.add_room_button = QPushButton(text="Add Stage Roomlist XML",parent=self.window)
@@ -283,18 +327,21 @@ class MainGUI:
 
         # searchKey = self.search_bar.keyPressEvent
         # self.search_bar.keyPressEvent = lambda e: self.search_keypress(searchKey, e)
-        self.search_filter = QCheckPanel(self, parent=self.window)
-        self.search_filter.checkbox_change = self.checkbox_change
+        self.group_filter = QCheckPanel(self, parent=self.window)
+        self.group_filter.checkbox_change = self.checkbox_change
+        self.kind_filter = QCheckPanel(self, parent=self.window)
+        self.kind_filter.checkbox_change = self.checkbox_change
 
-        self.filter_title = QLabel(parent=self.window)
-        self.filter_title.setText("Available Filters:")
-        self.filter_title.setAlignment(QtCore.Qt.AlignmentFlag.AlignBottom)
-        self.filter_title.setMaximumHeight(24)
+        self.group_filter_title = QCheckPanelLabel(parent=self.window,panel=self.group_filter,title="Available Groups:")
+        # self.group_filter_title.setMaximumHeight(48)
+
+        self.kind_filter_title = QCheckPanelLabel(parent=self.window,panel=self.kind_filter,title="Available Kinds:")
+        # self.kind_filter_title.setMaximumHeight(48)
 
         self.layout.setColumnMinimumWidth(1,128)
         # self.layout.setColumnMinimumWidth(3,96)
-        self.layout.setRowMinimumHeight(3,10)
-        self.layout.setRowMinimumHeight(6,10)
+        # self.layout.setRowMinimumHeight(3,10)
+        # self.layout.setRowMinimumHeight(6,10)
         # self.layout.setRowMinimumHeight(2,24)
         # self.layout.setRowMinimumHeight(3,24)
         # self.layout.setRowMinimumHeight(4,48)
@@ -302,16 +349,21 @@ class MainGUI:
         self.layout.addWidget(self.add_br_button,2,1,1,1)
         self.layout.addWidget(self.list_title,3,1,1,2,QtCore.Qt.AlignmentFlag.AlignBottom)
         self.layout.addWidget(self.loaded_file_list,4,1,2,2)
-        self.layout.addWidget(self.ent_tile_scroll_area,3,3,7,2)
+        self.layout.addWidget(self.group_filter_title,6,1,1,2,QtCore.Qt.AlignmentFlag.AlignBottom)
+        self.layout.addWidget(self.group_filter, 7, 1, 2, 2)
+        self.layout.addWidget(self.kind_filter_title,9,1,1,2,QtCore.Qt.AlignmentFlag.AlignBottom)
+        self.layout.addWidget(self.kind_filter, 10, 1, 2, 2)
+
+        self.layout.addWidget(self.ent_tile_scroll_area,3,3,9,2)
         self.layout.addWidget(self.search_bar, 1, 3, 2, 1)
-        self.layout.addWidget(self.search_filter, 7, 1, 3, 2)
-        self.layout.addWidget(self.filter_title,6,1,1,2,QtCore.Qt.AlignmentFlag.AlignBottom)
+
 
         for file in rooms:
             self.prompt_for_room(file=file)
 
         self.window.show()
-        self.checkbox_cache = self.search_filter.get_checkbox_states()
+        self.group_checkbox_cache = self.group_filter.get_checkbox_states()
+        self.kind_checkbox_cache = self.kind_filter.get_checkbox_states()
 
     def resized(self, e: QResizeEvent):
         config.settings["Width"] = e.size().width()
@@ -326,7 +378,8 @@ class MainGUI:
         self.window.repaint()
 
     def checkbox_change(self, checkbox:Qt.CheckState):
-        self.checkbox_cache = self.search_filter.get_checkbox_states()
+        self.group_checkbox_cache = self.group_filter.get_checkbox_states()
+        self.kind_checkbox_cache = self.kind_filter.get_checkbox_states()
         self.window.repaint()
         self.apply_entity_filters()
 
@@ -347,9 +400,9 @@ class MainGUI:
         if tile.br_entry:
             groupkey = f"Group: {tile.br_entry.group}"
             kindkey = f"Kind: {tile.br_entry.kind}"
-            if groupkey in self.checkbox_cache.keys() and self.checkbox_cache[groupkey] == 0:
+            if groupkey in self.group_checkbox_cache.keys() and self.group_checkbox_cache[groupkey] == 0:
                 return True 
-            if kindkey in self.checkbox_cache.keys() and self.checkbox_cache[kindkey] == 0:
+            if kindkey in self.kind_checkbox_cache.keys() and self.kind_checkbox_cache[kindkey] == 0:
                 return True 
             
         return (tile.id_label.text().lower().find(text) == -1 and len(text) != 0)
@@ -371,7 +424,7 @@ class MainGUI:
 
     def add_room(self, room: structs.Room):
         for spawn in room.spawns:
-            new_tile = QEntityTile(parent=self.ent_tile_area,entry=spawn.entry,panel=self.search_filter)
+            new_tile = QEntityTile(parent=self.ent_tile_area,entry=spawn.entry,group_panel=self.group_filter,kind_panel=self.kind_filter)
 
             if spawn.entry.type_string() in self.cur_entity_tiles.keys():
                 self.cur_entity_tiles[spawn.entry.type_string()].increment_quantity()
@@ -393,7 +446,8 @@ class MainGUI:
 
         self.cur_entity_tiles.clear()
         loaded_files = self.loaded_file_list.count()
-        self.search_filter.clear_checkboxes()
+        self.group_filter.clear_checkboxes()
+        self.kind_filter.clear_checkboxes()
 
         for ind in range(0,loaded_files):
             file = self.loaded_file_list.item(ind)
