@@ -75,6 +75,7 @@ def parse_stage(filename: str = None):
                 print(f"Parsing \'{filename}\' stage file contents...")
                 stage_file = BeautifulSoup(file.read(), "xml")
                 rooms = stage_file.find_all('room')
+                config.settings["RoomFiles"].add(filename)
                 
                 if len(rooms) > 0:
                     loaded_files.append(filename)

@@ -4,7 +4,7 @@ import config
 import sys
 import os 
 
-if __name__ == "__main__":
+def execute():
     config.load()
 
     for br_file in config.settings["BRFiles"]:
@@ -18,8 +18,16 @@ if __name__ == "__main__":
         if os.path.exists(os.path.dirname(sys.argv[i])):
             cmd_rooms.append(sys.argv[i])
 
-    gui = gui.MainGUI(cmd_rooms)
+    # TODO: figure out why there are floating QEntityTiles generated from loading existing files 
+    # for file in config.settings["RoomFiles"]:
+    #     if len(file) > 0 and os.path.exists(file):
+    #         cmd_rooms.append(file)
 
-    result = gui.app.exec()
+    cur_gui = gui.MainGUI(cmd_rooms)
+
+    result = cur_gui.app.exec()
     config.save()
     sys.exit(result)
+
+if __name__ == "__main__":
+    execute()

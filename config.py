@@ -8,8 +8,11 @@ settings = {
     "Height": 400,
     "LastPath": "",
     "GUI": True,
-    "BRFiles": set()
+    "BRFiles": set(),
+    "RoomFiles": set()
 }
+
+set_deserialize = lambda val: set(map(lambda val2: val2.replace(";",""),val.split(";")))
 
 cast_funcs = {
     "XPos": int,
@@ -18,7 +21,8 @@ cast_funcs = {
     "Height": int,
     "LastPath": str,
     "GUI": bool,
-    "BRFiles": lambda val: set(map(lambda val2: val2.replace(";",""),val.split(";")))
+    "BRFiles": set_deserialize,
+    "RoomFiles": set_deserialize
 }
 
 settings_file = "program_settings.ini"
