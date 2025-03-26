@@ -311,6 +311,7 @@ class MainGUI:
             self.prompt_for_room(file=file)
 
         self.window.show()
+        self.checkbox_cache = self.search_filter.get_checkbox_states()
 
     def resized(self, e: QResizeEvent):
         config.settings["Width"] = e.size().width()
@@ -325,36 +326,13 @@ class MainGUI:
         self.window.repaint()
 
     def checkbox_change(self, checkbox:Qt.CheckState):
-        self.filter_by_group_kind()
+        self.checkbox_cache = self.search_filter.get_checkbox_states()
         self.window.repaint()
+        self.apply_entity_filters()
 
-    def filter_by_group_kind(self):
-        checks = self.search_filter.get_checkbox_states()
-
+    def apply_entity_filters(self):
         for entkey in self.cur_entity_tiles.keys():
             tile = self.cur_entity_tiles[entkey]
-
-            if tile.br_entry:
-                groupkey = f"Group: {tile.br_entry.group}"
-                kindkey = f"Kind: {tile.br_entry.kind}"
-
-                if not tile.isHidden() and groupkey in checks and checks[groupkey] == 0:
-                    tile.setHidden(True)
-                    self.ent_tile_layout.removeWidget(tile)
-                elif not tile.isHidden() and kindkey in checks and checks[kindkey] == 0:
-                    tile.setHidden(True)
-                    self.ent_tile_layout.removeWidget(tile)
-                elif tile.isHidden() and not self.should_filter(tile):
-                    tile.setHidden(False)
-                    self.ent_tile_layout.addWidget(tile)
-
-    def should_filter(self, tile:QEntityTile):
-        text = self.search_bar.toPlainText().lower()
-        return tile.id_label.text().lower().find(text) == -1 and len(text) != 0
-
-    def search_keypress(self):
-        for key in self.cur_entity_tiles.keys():
-            tile = self.cur_entity_tiles[key]
 
             if self.should_filter(tile):
                 tile.setHidden(True)
@@ -362,6 +340,22 @@ class MainGUI:
             else:
                 tile.setHidden(False)
                 self.ent_tile_layout.addWidget(tile)
+
+    def should_filter(self, tile:QEntityTile):
+        text = self.search_bar.toPlainText().lower()
+
+        if tile.br_entry:
+            groupkey = f"Group: {tile.br_entry.group}"
+            kindkey = f"Kind: {tile.br_entry.kind}"
+            if groupkey in self.checkbox_cache.keys() and self.checkbox_cache[groupkey] == 0:
+                return True 
+            if kindkey in self.checkbox_cache.keys() and self.checkbox_cache[kindkey] == 0:
+                return True 
+            
+        return (tile.id_label.text().lower().find(text) == -1 and len(text) != 0)
+
+    def search_keypress(self):
+        self.apply_entity_filters()
 
     def list_keypress(self, e: QKeyEvent):
         if e.key() == Qt.Key.Key_Delete:
