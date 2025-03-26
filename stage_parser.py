@@ -54,7 +54,7 @@ def scrape_br_file(filename: str = None):
     
     print(f"Pre-scrape size: {old_total}, Post-scrape size: {len(basement_renovator_dictionary)}!")
 
-def get_br_entry(entry: structs.Entry):
+def get_br_entry(entry: structs.Entry) -> structs.BREntry:
     ret = basement_renovator_dictionary.get(entry.type_string())
 
     if ret != None:
@@ -70,47 +70,51 @@ def parse_stage(filename: str = None):
     
     # in case file selection is canceled validate once more
     if filename != None and os.path.exists(filename): 
-        with open(filename, 'r') as file:
-            print(f"Parsing \'{filename}\' stage file contents...")
-            stage_file = BeautifulSoup(file.read(), "xml")
-            rooms = stage_file.find_all('room')
+        try:
+            with open(filename, 'r') as file:
+                print(f"Parsing \'{filename}\' stage file contents...")
+                stage_file = BeautifulSoup(file.read(), "xml")
+                rooms = stage_file.find_all('room')
+                
+                if len(rooms) > 0:
+                    loaded_files.append(filename)
+
+                    for room in rooms: 
+                        if room:
+                            room_obj = structs.Room(entry=structs.Entry(type=room.get('type'),
+                                                                        variant=room.get('variant'),
+                                                                        subtype=room.get("subtype"),
+                                                                        weight=room.get('weight')),
+                                                    name=room.get('name'),
+                                                    shape=room.get('shape'),
+                                                    width=room.get('width'),
+                                                    height=room.get('height'),
+                                                    difficulty=room.get('difficulty'))
+                            
+                            for room_entry in room.children:
+                                if room_entry.name == 'spawn':
+                                    pos = structs.Pos(room_entry.get('x'), room_entry.get('y'))
+                                    room_entry = room_entry.find('entity')
+                                    
+                                    room_obj.add_spawn(structs.Spawn(pos=pos, 
+                                                                    entry=structs.Entry(type=room_entry.get('type'),
+                                                                                        variant=room_entry.get('variant'),
+                                                                                        subtype=room_entry.get("subtype"),
+                                                                                        weight=room_entry.get('weight'))))
+                                elif room_entry.name == 'door':
+                                    room_obj.add_door(structs.Door(pos=structs.Pos(room_entry.get('x'), room_entry.get('y')), 
+                                                                exists=room_entry.get('exists')))
+                            
+                            ret_rooms.append(room_obj)
+
+                    # Using find() to extract attributes 
+                    # of the first instance of the tag
+                    # b_name = roomlist.find('child', {'name':'Frank'})
             
-            if len(rooms) > 0:
-                loaded_files.append(filename)
-
-                for room in rooms: 
-                    if room:
-                        room_obj = structs.Room(entry=structs.Entry(type=room.get('type'),
-                                                                    variant=room.get('variant'),
-                                                                    subtype=room.get("subtype"),
-                                                                    weight=room.get('weight')),
-                                                name=room.get('name'),
-                                                shape=room.get('shape'),
-                                                width=room.get('width'),
-                                                height=room.get('height'),
-                                                difficulty=room.get('difficulty'))
-                        
-                        for room_entry in room.children:
-                            if room_entry.name == 'spawn':
-                                pos = structs.Pos(room_entry.get('x'), room_entry.get('y'))
-                                room_entry = room_entry.find('entity')
-                                
-                                room_obj.add_spawn(structs.Spawn(pos=pos, 
-                                                                entry=structs.Entry(type=room_entry.get('type'),
-                                                                                    variant=room_entry.get('variant'),
-                                                                                    subtype=room_entry.get("subtype"),
-                                                                                    weight=room_entry.get('weight'))))
-                            elif room_entry.name == 'door':
-                                room_obj.add_door(structs.Door(pos=structs.Pos(room_entry.get('x'), room_entry.get('y')), 
-                                                            exists=room_entry.get('exists')))
-                        
-                        ret_rooms.append(room_obj)
-
-                # Using find() to extract attributes 
-                # of the first instance of the tag
-                # b_name = roomlist.find('child', {'name':'Frank'})
-        
-        config.save()
+            config.save()
+        except PermissionError:
+            print(f"Unable to read \'{filename}\', program lacks sufficient permissions!")
+            config.save()
     
     return ret_rooms, filename
 

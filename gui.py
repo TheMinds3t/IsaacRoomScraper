@@ -6,7 +6,7 @@ import config
 import math
 
 # import PyQt6.QtWidgets as qt
-from PyQt6.QtWidgets import QVBoxLayout, QApplication, QLabel, QWidget, QPushButton, QScrollArea, QGridLayout, QVBoxLayout,  QLayout, QSizePolicy, QListWidget, QListWidgetItem, QTextEdit
+from PyQt6.QtWidgets import QVBoxLayout, QApplication, QLabel, QWidget, QPushButton, QScrollArea, QGridLayout, QVBoxLayout,  QLayout, QSizePolicy, QListWidget, QListWidgetItem, QTextEdit, QCheckBox
 from PyQt6 import QtCore, QtGui
 from PyQt6.QtGui import QImage, QPixmap, QKeyEvent, QResizeEvent, QMoveEvent
 from PyQt6.QtCore import QMargins, QPoint, QRect, QSize, Qt, QModelIndex, pyqtSlot, QRunnable
@@ -34,51 +34,6 @@ class QWorker(QRunnable):
     def run(self):
         self.funct(*self.args, **self.kwargs)
 
-class QEntityTile(QWidget):
-    def __init__(self, entry: structs.Entry, parent: QWidget):
-        super().__init__(parent=parent)
-        self.entry = entry 
-        self.layout = QVBoxLayout(self)
-        self.setLayout(self.layout)
-        self.setMaximumSize(128,160)
-        self.id_label = QLabel(self.entry.type_string())
-        self.setFixedSize(128,96)
-
-        ent_info = stage_parser.get_br_entry(self.entry)
-        if ent_info:
-            self.img = QImage(ent_info.image)
-            self.img_label = QLabel(parent=self)
-            self.img_label.setPixmap(QPixmap(self.img))
-            self.setFixedSize(max(math.floor(self.img.width()*2),128),max(math.floor(self.img.height()*1.5)+64,96))
-            self.layout.addWidget(self.img_label)
-            self.id_label.setText(f"{ent_info.name}\n{self.entry.type_string()}")
-
-        self.layout.addWidget(self.id_label)
-        self.quantity_label = QLabel("Quantity: 1",parent=self)
-        self.layout.addWidget(self.quantity_label)
-        self.quantity = 1
-
-    def increment_quantity(self):
-        self.quantity += 1
-        self.quantity_label.setText(f"Quantity: {self.quantity}")
-
-    def paintEvent(self, e):
-        super().paintEvent(e)
-        painter = QtGui.QPainter(self)
-        rect = QtCore.QRect(0, 0, painter.device().width(), painter.device().height())
-        painter.setBrush(QtGui.QColor(255, 255, 255))
-        painter.drawRect(rect)
-
-class QSearchFilterTool(QWidget):
-    def __init__(self, parent:QWidget = None):
-        super().__init__(parent)
-        self.search_bar = QTextEdit(self)
-        self.search_bar.setPlaceholderText("Search...")
-        self.search_bar.setMaximumHeight(int(self.search_bar.font().pointSize()*3.0) + 15)
-        self.search_bar.setSizePolicy(QSizePolicy.Policy.Maximum,QSizePolicy.Policy.Maximum)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Expanding)
-
-        # self.layout = QGridLayout()
 
 
 # sourced from https://doc.qt.io/qtforpython-6/examples/example_widgets_layouts_flowlayout.html
@@ -182,8 +137,105 @@ class QFlowLayout(QLayout):
         for item in self._item_list:
             item.paintEvent(e)
 
+class QCheckPanel(QScrollArea):
+    def __init__(self, parent:QWidget = None):
+        super().__init__(parent=parent)
+        self.setWidgetResizable(True)
+        self.setMinimumSize(256, 64)
+        self.setVerticalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        self.setHorizontalScrollBarPolicy(QtCore.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+
+        self.panel = QWidget()
+
+        self.check_layout = QVBoxLayout()
+        self.check_layout.setSpacing(0)
+        self.check_layout.setContentsMargins(5,5,5,5)
+        self.panel.setLayout(self.check_layout)
+
+        self.setWidget(self.panel)
+        self.checks = dict[str,QCheckBox]()
+
+    def add_checkbox(self, text:str):
+        if text not in self.checks:
+            self.checks[text] = QCheckBox(text,self)
+            self.checks[text].setMaximumHeight(self.checks[text].font().pointSize()*2)
+            self.checks[text].checkStateChanged.connect(slot=self.checkbox_change)
+            self.check_layout.addWidget(self.checks[text])
+
+    def checkbox_change(self, checkbox:Qt.CheckState):
+        print(checkbox.value)
+
+    def get_checkbox_states(self):
+        ret = {}
+
+        for key in self.checks.keys():
+            ret[key] = self.checks[key].isChecked()
+
+        return ret 
+    
+    def remove_checkbox(self, text:str):
+        if text in self.checks:
+            self.check_layout.removeWidget(self.checks[text])
+            self.checks[text].setParent(None)
+            self.checks.pop(text)
+
+    def clear_checkboxes(self):
+        cache = []
+        for key in self.checks.keys():
+            cache.append(key)
+        
+        for key in cache:
+            self.remove_checkbox(key)
+            
+
+class QEntityTile(QWidget):
+    def __init__(self, entry: structs.Entry, panel:QCheckPanel = None, parent: QWidget = None):
+        super().__init__(parent=parent)
+        self.entry = entry 
+        self.layout = QVBoxLayout(self)
+        self.setLayout(self.layout)
+        self.setMaximumSize(128,160)
+        self.id_label = QLabel(self.entry.type_string())
+        self.setFixedSize(128,96)
+
+        ent_info = stage_parser.get_br_entry(self.entry)
+        if ent_info:
+            self.img = QImage(ent_info.image)
+            self.img_label = QLabel(parent=self)
+            self.img_label.setPixmap(QPixmap(self.img))
+            self.setFixedSize(max(math.floor(self.img.width()*2),128),max(math.floor(self.img.height()*1.5)+64,96))
+            self.layout.addWidget(self.img_label)
+            self.id_label.setText(f"{ent_info.name}\n{self.entry.type_string()}")
+            panel.add_checkbox(f"Group: {ent_info.group}")
+            panel.add_checkbox(f"Kind: {ent_info.kind}")
+
+        self.layout.addWidget(self.id_label)
+        self.quantity_label = QLabel("Quantity: 1",parent=self)
+        self.layout.addWidget(self.quantity_label)
+        self.quantity = 1
+
+    def increment_quantity(self):
+        self.quantity += 1
+        self.quantity_label.setText(f"Quantity: {self.quantity}")
+
+    def paintEvent(self, e):
+        super().paintEvent(e)
+        painter = QtGui.QPainter(self)
+        rect = QtCore.QRect(0, 0, painter.device().width(), painter.device().height())
+        painter.setBrush(QtGui.QColor(255, 255, 255))
+        painter.drawRect(rect)
 
 class MainGUI:
+    
+    def prompt_for_room(self, event = None, file: str = None):
+        roomlist, filename = stage_parser.parse_stage(file)
+
+        if filename != None:
+            for room in roomlist:
+                self.add_room(room)
+            self.loaded_file_list.addItem(QListWidgetItem(filename, self.loaded_file_list))
+            self.window.repaint()
+
     def __init__(self, rooms: list):
         self.app = QApplication([])
         self.window = QWidget()
@@ -222,7 +274,7 @@ class MainGUI:
         self.add_room_button.clicked.connect(self.prompt_for_room)
         self.add_br_button = QPushButton(text="Add Basement Renovator Entity XMLs For Images",parent=self.window)
         self.add_br_button.clicked.connect(self.prompt_for_br)
-        self.cur_entity_tiles = {}
+        self.cur_entity_tiles = dict[str,QEntityTile]()
         self.loaded_rooms = list()
 
         self.search_bar = QTextEdit(parent=self.window)
@@ -231,26 +283,26 @@ class MainGUI:
 
         # searchKey = self.search_bar.keyPressEvent
         # self.search_bar.keyPressEvent = lambda e: self.search_keypress(searchKey, e)
-        self.search_filter = QSearchFilterTool(parent=self.window)
-        self.search_filter.setHidden(True)
+        self.search_filter = QCheckPanel(parent=self.window)
 
         self.layout.setColumnMinimumWidth(1,96)
-        self.layout.setColumnMinimumWidth(3,96)
-        self.layout.setRowMinimumHeight(1,24)
-        self.layout.setRowMinimumHeight(2,24)
-        self.layout.setRowMinimumHeight(3,24)
-        self.layout.setRowMinimumHeight(4,48)
+        # self.layout.setColumnMinimumWidth(3,96)
+        # self.layout.setRowMinimumHeight(1,24)
+        # self.layout.setRowMinimumHeight(2,24)
+        # self.layout.setRowMinimumHeight(3,24)
+        # self.layout.setRowMinimumHeight(4,48)
         self.layout.addWidget(self.add_room_button,1,1,1,1)
         self.layout.addWidget(self.add_br_button,2,1,1,1)
         self.layout.addWidget(self.list_title,3,1,1,2,QtCore.Qt.AlignmentFlag.AlignBottom)
-        self.layout.addWidget(self.loaded_file_list,4,1,2,2)
-        self.layout.addWidget(self.ent_tile_scroll_area,3,3,3,2)
+        self.layout.addWidget(self.loaded_file_list,4,1,3,2)
+        self.layout.addWidget(self.ent_tile_scroll_area,3,3,7,2)
         self.layout.addWidget(self.search_bar, 1, 3, 2, 1)
-        self.layout.addWidget(self.search_filter, 1, 4, 2, 1)
-        self.window.show()
+        self.layout.addWidget(self.search_filter, 7, 1, 3, 2)
 
-        for room in rooms:
-            self.add_room(room)
+        for file in rooms:
+            self.prompt_for_room(file=file)
+
+        self.window.show()
 
     def resized(self, e: QResizeEvent):
         config.settings["Width"] = e.size().width()
@@ -260,13 +312,6 @@ class MainGUI:
         config.settings["XPos"] = e.pos().x()
         config.settings["YPos"] = e.pos().y()
 
-    def prompt_for_room(self):
-        roomlist, filename = stage_parser.parse_stage()
-        if filename != None:
-            for room in roomlist:
-                self.add_room(room)
-            self.loaded_file_list.addItem(QListWidgetItem(filename, self.loaded_file_list))
-            self.window.repaint()
 
     def prompt_for_br(self):
         stage_parser.scrape_br_file()
@@ -300,7 +345,7 @@ class MainGUI:
 
     def add_room(self, room: structs.Room):
         for spawn in room.spawns:
-            new_tile = QEntityTile(parent=self.ent_tile_area,entry=spawn.entry)
+            new_tile = QEntityTile(parent=self.ent_tile_area,entry=spawn.entry,panel=self.search_filter)
 
             if spawn.entry.type_string() in self.cur_entity_tiles.keys():
                 self.cur_entity_tiles[spawn.entry.type_string()].increment_quantity()
@@ -322,11 +367,12 @@ class MainGUI:
 
         self.cur_entity_tiles.clear()
         loaded_files = self.loaded_file_list.count()
+        self.search_filter.clear_checkboxes()
 
         for ind in range(0,loaded_files):
-            file = self.loaded_file_list.itemAt(QPoint(ind,0))
+            file = self.loaded_file_list.item(ind)
             if isinstance(file, QListWidgetItem):
-                print(f"Reloading \'{file}\'..")
+                print(f"Reloading \'{file.text()}\'..")
                 stage,filename = stage_parser.parse_stage(file.text())
 
                 if stage != None:

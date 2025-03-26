@@ -16,7 +16,7 @@ if __name__ == "__main__":
 
     for i in range(1,len(sys.argv)):
         if os.path.exists(os.path.dirname(sys.argv[i])):
-            cmd_rooms.append(stage_parser.parse_stage(sys.argv[i]))
+            cmd_rooms.append(sys.argv[i])
 
     gui = gui.MainGUI(cmd_rooms)
 
