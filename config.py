@@ -7,7 +7,6 @@ settings = {
     "Width": 600,
     "Height": 400,
     "LastPath": "",
-    "GUI": True,
     "BRFiles": set(),
     "RoomFiles": set()
 }
@@ -20,7 +19,6 @@ cast_funcs = {
     "Width": int,
     "Height": int,
     "LastPath": str,
-    "GUI": bool,
     "BRFiles": set_deserialize,
     "RoomFiles": set_deserialize
 }

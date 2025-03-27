@@ -1,3 +1,6 @@
 /__pycache__
 program_settings.ini
 *.lnk
+build/
+icon.png
+main.spec

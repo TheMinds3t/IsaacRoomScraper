@@ -274,7 +274,13 @@ class MainGUI:
         if filename != None:
             for room in roomlist:
                 self.add_room(room)
-            self.loaded_file_list.addItem(QListWidgetItem(filename, self.loaded_file_list))
+            
+            if type(filename) == list:
+                for f_name in filename:
+                    self.loaded_file_list.addItem(QListWidgetItem(f_name, self.loaded_file_list))
+            else:
+                self.loaded_file_list.addItem(QListWidgetItem(filename, self.loaded_file_list))
+
             self.window.repaint()
 
     def __init__(self, rooms: list):
@@ -434,6 +440,7 @@ class MainGUI:
                 self.ent_tile_layout.addWidget(new_tile)
                 # self.ent_tile_layout.update()
                 self.cur_entity_tiles[spawn.entry.type_string()] = new_tile
+                self.window.repaint()
 
         self.loaded_rooms.append(room)
         self.window.repaint()
