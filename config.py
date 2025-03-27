@@ -45,6 +45,8 @@ def load():
         with io.open(settings_file, "r") as im_file:
             for line in im_file.readlines():
                 vals = line.replace("\n","").split("=")
-                settings[vals[0]] = cast_funcs[vals[0]](vals[1])
+
+                if settings.get(vals[0]) != None:
+                    settings[vals[0]] = cast_funcs[vals[0]](vals[1])
 
             im_file.close()

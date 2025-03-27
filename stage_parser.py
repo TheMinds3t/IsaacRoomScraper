@@ -67,57 +67,58 @@ def flush_floor_group_kind_dict(queue:ResultSet):
     
 def scrape_br_file(filename: str = None):
     old_total = len(basement_renovator_dictionary)
-    filename = pass_or_find_file(filename=filename, msg="Open the EntitiesMod.xml/EntitiesRepentance.xml file from Basement Renovator")
-    
-    # in case file selection is canceled validate once more
-    if filename != None and os.path.exists(filename):
-        with open(filename, 'r') as file:
-            config.settings["BRFiles"].add(filename)
-            reg_file = BeautifulSoup(file.read(), "xml")
-            floor_group_layout = reg_file.find_all(name="group")
+    filenames = pass_or_find_file(filename=filename, msg="Open the EntitiesMod.xml/EntitiesRepentance.xml file from Basement Renovator",multiple=True)
 
-            if floor_group_layout:
-                print(f"Adding floormap for {filename}:")
-                flush_floor_group_kind_dict(floor_group_layout)
+    for filename in filenames:
+        # in case file selection is canceled validate once more
+        if filename != None and os.path.exists(filename):
+            with open(filename, 'r') as file:
+                config.settings["BRFiles"].add(filename)
+                reg_file = BeautifulSoup(file.read(), "xml")
+                floor_group_layout = reg_file.find_all(name="group")
 
-            for ent in reg_file.find('data').find_all('entity'):
-                if ent and "ID" in ent.attrs and "Variant" in ent.attrs:
-                    group = ent.get("Group")
-                    kind = ent.get("Kind")
+                if floor_group_layout:
+                    print(f"Adding floormap for {filename}:")
+                    flush_floor_group_kind_dict(floor_group_layout)
 
-                    if group == None and ent.parent.name == "group":
-                        if "Label" in ent.parent.attrs or "Name" in ent.parent.attrs:
-                            kind = ent.parent.get("Label")                        
-                            group = ent.parent.get("Name")
-                        else:
-                            cur_parent = ent.parent 
+                for ent in reg_file.find('data').find_all('entity'):
+                    if ent and "ID" in ent.attrs and "Variant" in ent.attrs:
+                        group = ent.get("Group")
+                        kind = ent.get("Kind")
 
-                            while cur_parent.name == "group":
-                                if "Name" in cur_parent.attrs:
-                                    group = cur_parent["Name"]
-                                if "Label" in cur_parent.attrs:
-                                    kind = cur_parent["Label"]
+                        if group == None and ent.parent.name == "group":
+                            if "Label" in ent.parent.attrs or "Name" in ent.parent.attrs:
+                                kind = ent.parent.get("Label")                        
+                                group = ent.parent.get("Name")
+                            else:
+                                cur_parent = ent.parent 
 
-                                cur_parent = cur_parent.parent 
+                                while cur_parent.name == "group":
+                                    if "Name" in cur_parent.attrs:
+                                        group = cur_parent["Name"]
+                                    if "Label" in cur_parent.attrs:
+                                        kind = cur_parent["Label"]
 
-                                if cur_parent.parent.name != "group":
-                                    break
+                                    cur_parent = cur_parent.parent 
 
-                    if kind == None and group != None and group in br_group_to_kind_map:
-                        kind = br_group_to_kind_map[group]
+                                    if cur_parent.parent.name != "group":
+                                        break
 
-                    if group == None and kind != None and kind in br_group_to_kind_map:
-                        group = br_group_to_kind_map[kind]
+                        if kind == None and group != None and group in br_group_to_kind_map:
+                            kind = br_group_to_kind_map[group]
 
-                    if ent.parent.name == "group" and "Label" in ent.parent.attrs:
-                        kind = ent.parent["Label"]
+                        if group == None and kind != None and kind in br_group_to_kind_map:
+                            group = br_group_to_kind_map[kind]
 
-                    br_entry = structs.BREntry(group=group,kind=kind, image=f"{os.path.dirname(filename)}/{ent.get("Image")}",id=ent.get("ID"),variant=ent.get("Variant"),subtype=ent.get("Subtype"),name=ent.get("Name"))
-                    basement_renovator_dictionary.setdefault(br_entry.entry.type_string(), br_entry)
+                        if ent.parent.name == "group" and "Label" in ent.parent.attrs:
+                            kind = ent.parent["Label"]
 
-            config.save()
-    
-    print(f"Pre-scrape size: {old_total}, Post-scrape size: {len(basement_renovator_dictionary)}!")
+                        br_entry = structs.BREntry(group=group,kind=kind, image=f"{os.path.dirname(filename)}/{ent.get("Image")}",id=ent.get("ID"),variant=ent.get("Variant"),subtype=ent.get("Subtype"),name=ent.get("Name"))
+                        basement_renovator_dictionary.setdefault(br_entry.entry.type_string(), br_entry)
+
+                config.save()
+        
+        print(f"Pre-scrape size: {old_total}, Post-scrape size: {len(basement_renovator_dictionary)}!")
 
 def get_br_entry(entry: structs.Entry) -> structs.BREntry:
     ret = basement_renovator_dictionary.get(entry.type_string())

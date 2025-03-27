@@ -266,6 +266,11 @@ class QEntityTile(QWidget):
         painter.setBrush(QtGui.QColor(255, 255, 255))
         painter.drawRect(rect)
 
+class QBufferTask(QWidget):
+    def __init__(self, task, parent:QWidget = None):
+        super.__init__(parent=parent)
+        self.task = task 
+
 class MainGUI:
     
     def prompt_for_room(self, event = None, file: str = None):
@@ -310,6 +315,7 @@ class MainGUI:
         # room file list 
         self.loaded_file_list = QListWidget(parent=self.window)
         self.loaded_file_list.setSortingEnabled(True)
+        self.loaded_file_list.setSelectionMode(QListWidget.SelectionMode.MultiSelection)
         self.loaded_file_list.keyPressEvent = lambda e: self.list_keypress(e)
         self.list_title = QLabel(parent=self.window)
         self.list_title.setText("Loaded Files:")
@@ -418,15 +424,19 @@ class MainGUI:
 
     def list_keypress(self, e: QKeyEvent):
         if e.key() == Qt.Key.Key_Delete:
-            self.remove_roomlist(self.loaded_file_list.currentItem())
+            for item in self.loaded_file_list.selectedItems():
+                self.remove_roomlist(item,False)
 
-    def remove_roomlist(self, sel_file:QListWidgetItem):
+            self.update_entity_tiles()
+
+    def remove_roomlist(self, sel_file:QListWidgetItem, update:bool = True):
         print(f"Unloaded \'{sel_file.text()}\'")
         self.loaded_file_list.update()
         self.loaded_file_list.repaint()
         config.settings["RoomFiles"].remove(self.loaded_file_list.takeItem(self.loaded_file_list.currentIndex().row()).text())
         
-        self.update_entity_tiles()
+        if update:
+            self.update_entity_tiles()
 
     def add_room(self, room: structs.Room):
         for spawn in room.spawns:
